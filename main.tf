@@ -10,24 +10,22 @@ provider "aws" {
 #########################  AWS RESOURCES  #########################
 
 resource "aws_instance" "openvpn" {
-  ami                         = var.openvpn_ami # data.aws_ami.openvpn.id
+  ami                         = var.openvpn_ami
   instance_type               = var.instance_type
   associate_public_ip_address = true
   security_groups             = [aws_security_group.openvpn.name]
   key_name                    = var.enable_ssh_access ? aws_key_pair.openvpn[0].key_name : null
-  user_data                   = data.template_file.userdata.rendered
+  user_data = templatefile(
+    "${path.module}/userdata.sh",
+    {
+      vpn_username = var.vpn_username,
+      vpn_password = var.vpn_password == "" ? random_string.vpn_password.result : var.vpn_password
+    }
+  )
+  #  user_data                   = data.template_file.userdata.rendered
 
   tags = {
     Name = "OpenVPN Access Server"
-  }
-}
-
-data "template_file" "userdata" {
-  template = file("${path.module}/userdata.sh")
-
-  vars = {
-    vpn_username = var.vpn_username
-    vpn_password = var.vpn_password == "" ? random_string.vpn_password.result : var.vpn_password
   }
 }
 
@@ -157,25 +155,4 @@ output "vpn_username" {
 
 output "vpn_password" {
   value = random_string.vpn_password.result
-}
-
-#########################  AMI  #########################
-# Since the AMI must be first subscribed by AWS Marketplace,
-# it can NOT be simply fetched like the following.
-# So the AMI should be specifically defined.
-
-data "aws_ami" "openvpn" {
-  most_recent = true
-
-  filter {
-    name   = "name"
-    values = ["OpenVPN Access Server Community Image-*"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-
-  owners = ["679593333241"] # aws-marketplace
 }
